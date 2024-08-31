@@ -60,14 +60,13 @@ class PsanaWrapperSmd(BasePsanaWrapper):
         super().__init__(exp, run, detector_name)
         self.datasource_id = f"exp={exp}:run={run}:smd"
         self.datasource    = MPIDataSource(self.datasource_id)
-        self.run_current   = next(self.datasource.runs())
+        self.events        = self.datasource.times()
+
+    def __len__(self) -> int:
+        return len(self.events)
 
     def iter_events(self, mode: ImageRetrievalMode = ImageRetrievalMode.calib,
                     id_panel: Optional[int] = None) -> Iterable[np.ndarray]:
-        for event in self.run_current.events():
+        for event in self.events():
             data = self.read[mode](event)
             yield data[id_panel] if id_panel is not None else data
-
-    def assemble(self, multipanel: bool = None, mode: ImageRetrievalMode = ImageRetrievalMode.image) -> np.ndarray:
-        event = next(self.run_current.events())
-        return self.read[mode](event, multipanel)
