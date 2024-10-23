@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Union, Iterable, Optional
 from abc import ABC, abstractmethod
 from psana import DataSource, Detector, MPIDataSource
+from .utils import wavelength_to_photon_energy
 
 class ImageRetrievalMode(str, Enum):
     raw   = "raw"
@@ -15,10 +16,6 @@ class BasePsanaWrapper(ABC):
         self.exp = exp
         self.run = run
         self.detector_name = detector_name
-
-    def create_bad_pixel_mask(self) -> np.ndarray:
-        return self.read["mask"](self.run_current, calib=True, status=True, edges=True,
-                                 central=True, unbond=True, unbondnbrs=True, unbondnbrs8=False).astype(np.uint16)
 
 class PsanaWrapperIdx(BasePsanaWrapper):
     def __init__(self, exp: str, run: int, detector_name: str):
@@ -64,6 +61,11 @@ class PsanaWrapperIdx(BasePsanaWrapper):
         event = self.get_event(event_num)
         return self.read[mode](event, multipanel)
 
+    def create_bad_pixel_mask(self) -> np.ndarray:
+        return self.read["mask"](self.run_current, calib=True, status=True, edges=True,
+                                 central=True, unbond=True, unbondnbrs=True, unbondnbrs8=False).astype(np.uint16)
+
+
 class PsanaWrapperSmd(BasePsanaWrapper):
     def __init__(self, exp: str, run: int, detector_name: str):
         super().__init__(exp, run, detector_name)
@@ -79,6 +81,10 @@ class PsanaWrapperSmd(BasePsanaWrapper):
             "mask" : self.detector.mask,
         }
 
+        # Photon energy
+        self.wavelength_by_detector = Detector('SIOC:SYS0:ML00:AO192')
+
+
     def __len__(self) -> int:
         return len(self.events)
 
@@ -89,4 +95,9 @@ class PsanaWrapperSmd(BasePsanaWrapper):
         ) -> Iterable[np.ndarray]:
         for event in self.events:
             data = self.read[mode](event)
-            yield data[id_panel] if id_panel is not None else data
+            photon_energy = wavelength_to_photon_energy(self.wavelength_by_detector())
+            yield (data[id_panel], photon_energy) if id_panel is not None else (data, photon_energy)
+
+    def create_bad_pixel_mask(self) -> np.ndarray:
+        return self.read["mask"](self.run, calib=True, status=True, edges=True,
+                                 central=True, unbond=True, unbondnbrs=True, unbondnbrs8=False).astype(np.uint16)
